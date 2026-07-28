@@ -1,0 +1,2 @@
+sample_id,sigma,coherence_threshold,angle_threshold,intensity_threshold,cortex_area_px,mean_cortex_intensity_raw,median_cortex_intensity_raw,std_cortex_intensity_raw,total_classified,radial,tangential,uncertain,total_vectors,radial_density,tangential_density,uncertain_density,radial_fraction,tangential_fraction
+demo_image,1.0,0.5,25,0.6,10851653,36737.81100418526,37880.0,11075.08012069006,2261,1007,1254,1687,3948,9.279692227534367e-05,0.00011555843151269212,0.00015546018657249728,0.44537815126050423,0.5546218487394958

@@ -1,0 +1,2 @@
+sample_id,n_segmented_profiles,mean_bundle_area_px,median_bundle_area_px,std_bundle_area_px,q25_bundle_area_px,q75_bundle_area_px,striatum_total_count,striatum_total_area,striatum_total_density
+demo_image,2031,1498.3215164943379,1135.0,1202.9192187435215,700.0,1920.5,2031,8048098,0.0002523577620451
