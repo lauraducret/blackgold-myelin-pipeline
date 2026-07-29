@@ -112,6 +112,9 @@ Staining method:
 Cellpose-SAM:
 > Pachitariu, M., Rariden, M., & Stringer, C. (2025). Cellpose-SAM: superhuman generalization for cellular segmentation. *bioRxiv*.
 
+Cellpose 2.0:
+> Pachitariu, M. & Stringer, C . Cellpose 2.0: How to Train Your Own Model”. In: Nature Methods 19.12 (Dec. 2022), pp. 1634–1641. issn: 1548-7105. doi: 10.1038/s41592-022-01663-4. PMID: 36344832.
+
 ## Acknowledgments
 
 The Cellpose-SAM segmentation workflow in `2_striatum_cellpose_fiber_counting_pipeline.ipynb` is adapted from the official [Cellpose-SAM example notebook](https://github.com/MouseLand/cellpose/tree/main), from the [Cellpose](https://github.com/MouseLand/cellpose) repository (Pachitariu lab / MouseLand). The custom model, ROI-matching logic, striatum-specific counting, and density calculations are original to this pipeline.
