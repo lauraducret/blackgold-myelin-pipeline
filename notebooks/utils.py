@@ -4,6 +4,7 @@ This file contains all additional functions used by the main notebooks
 
 import zipfile
 import tempfile
+import tifffile
 from pathlib import Path
 
 import numpy as np
@@ -17,6 +18,9 @@ from skimage.color import gray2rgb
 
 
 def strip_roi_suffix(stem):
+    """
+    To match all potential suffix used to save the ROI zip files
+    """
     for suffix in ("_roiset", "_rois", "_roi"):
         if stem.lower().endswith(suffix):
             return stem[: -len(suffix)]
@@ -85,7 +89,9 @@ def normalize01_within_mask(image, mask):
 
 
 def normalize01(img):
-    """Normalize image for display only."""
+    """
+    Normalize image for display only.
+    """
     img = img.astype(float)
     p1, p99 = np.percentile(img, [1, 99])
     img = np.clip(img, p1, p99)
@@ -93,6 +99,9 @@ def normalize01(img):
 
 
 def get_roi_by_name(rois, keyword):
+    """
+    Find the correct ROI in a zip file
+    """
     matches = [
         roi for roi in rois
         if keyword.lower() in roi.name.lower()
@@ -105,6 +114,10 @@ def get_roi_by_name(rois, keyword):
 
 
 def roi_to_mask(roi, shape):
+    """
+    Creates a binary mask based on the .roi
+    Outputs 1 if in the ROI, 0 otherwise
+    """
     coords = roi.coordinates()
     x, y = coords[:, 0], coords[:, 1]
 
@@ -116,6 +129,10 @@ def roi_to_mask(roi, shape):
 
 
 def densify_surface_coords(coords, spacing=2):
+    """
+    Interpolate extra points along each segment of a fragmented line 
+    so consecutive points are ~spacing px apart.
+    """
     coords = coords.astype(float)
     dense_points = []
 
@@ -135,6 +152,9 @@ def densify_surface_coords(coords, spacing=2):
 
 
 def surface_tangent_angles(surface_roi, spacing=2):
+    """
+    Returns the tangent angle to the inner cortical surface
+    """
     raw_coords = surface_roi.coordinates().astype(float)
 
     coords = densify_surface_coords(raw_coords, spacing=spacing)
@@ -151,6 +171,11 @@ def surface_tangent_angles(surface_roi, spacing=2):
 
 
 def nearest_surface_reference(pixel_y, pixel_x, surface_coords, tangent_angles):
+    """
+    Find the nearest reference on the inner surface
+
+    Outputs the closest x and y coordinates, the local tangent and radial angles
+    """
     surface_x = surface_coords[:, 0]
     surface_y = surface_coords[:, 1]
 
@@ -188,7 +213,9 @@ def prepare_image_for_cellpose(img):
 
 
 def image_for_display(img):
-    """Return a 2D image for grayscale display."""
+    """
+    Return a 2D image for grayscale display.
+    """
     if img.ndim == 2:
         return normalize01(img)
     if img.ndim == 3:
@@ -254,7 +281,9 @@ def load_rois(roi_path):
 
 
 def find_roi_by_keywords(rois, keywords):
-    """Find first ROI whose name contains one of the requested keywords."""
+    """
+    Find first ROI whose name contains one of the requested keywords.
+    """
     available = list(rois.keys())
 
     for keyword in keywords:
@@ -332,7 +361,10 @@ def make_count_overlay(display_img, masks, right_mask, left_mask, right_ids, lef
 
 
 def make_numbered_overlay(display_img, masks, roi_mask, object_ids, title, out_path, color="red", MAX_LABELS_TO_DRAW=500):
-    """Overlay with sequential numbers for objects inside one ROI."""
+    """
+    Overlay with sequential numbers for objects inside one ROI.
+    Allows to see the first segmented fibers and counting
+    """
     base = image_for_display(display_img)
 
     object_id_set = set(object_ids)
@@ -370,12 +402,10 @@ def resolve_path(path_value, base_dir=None):
 
 
 def get_line_endpoints(roi):
-    """Return (x1, y1, x2, y2) for a line ROI.
+    """
+    Return (x1, y1, x2, y2) for a line ROI.
 
-    Most sep_R/sep_L ROIs have exactly 2 points, but a few were drawn with the
-    ImageJ segmented-line tool and have a couple of extra points clustered
-    (jitter) near one end. Using the two farthest-apart points is robust to
-    both cases.
+    Find the two farthest point in the segmented line to separate a ROI to know how it is split.
     """
     coords = roi.coordinates().astype(float)
     if coords.shape[0] < 2:
@@ -392,7 +422,8 @@ def get_line_endpoints(roi):
 
 
 def line_y_at_x(x, x1, y1, x2, y2):
-    """y-coordinate of the (x1,y1)-(x2,y2) line at position x.
+    """
+    y-coordinate of the (x1,y1)-(x2,y2) line at position x.
 
     Fully vectorized/elementwise: x, x1, y1, x2, y2 can each be a scalar or an
     array (e.g. one row per fiber object, each with its own line).
@@ -411,7 +442,10 @@ def line_y_at_x(x, x1, y1, x2, y2):
 
 
 def split_roi_area(cpu_roi, sep_roi, image_shape):
-    """Rasterize cpu_roi and split its pixel area into dorsal/ventral by sep_roi."""
+    """
+    Turns the striatum ROI into a mask and separate it based on the drawn separation ROI
+    Classify between dorsal and ventral region
+    """
     roi_mask = roi_to_mask(cpu_roi, image_shape)
     x1, y1, x2, y2 = get_line_endpoints(sep_roi)
 
@@ -426,3 +460,59 @@ def split_roi_area(cpu_roi, sep_roi, image_shape):
     ventral_area = total_area - dorsal_area
 
     return dorsal_area, ventral_area, total_area
+
+
+def plot_dorsal_ventral_qc(samples, sample_id, objects_df, downsample=4, figsize=(9, 8)):
+    """
+    QC overlay: raw image + Striatum_R/Striatum_L outline + sep_R/sep_L line + classified fiber centroids.
+    """
+    match = samples[samples["sample_id"].astype(str) == str(sample_id)]
+    if match.empty:
+        raise ValueError(f"No sample found for sample_id={sample_id!r}")
+    sample = match.iloc[0]
+
+    image_path = sample["image_path"]
+    roi_path = sample["roi_zip_path"]
+    image_file = image_path.name
+
+    rois = ImagejRoi.fromfile(roi_path)
+    cpu_r = get_roi_by_name(rois, "Striatum_R")
+    cpu_l = get_roi_by_name(rois, "Striatum_L")
+    sep_r = get_roi_by_name(rois, "sep_R")
+    sep_l = get_roi_by_name(rois, "sep_L")
+
+    img = tifffile.imread(image_path)
+    if img.ndim == 3:
+        img = img.mean(axis=2)
+    height, width = img.shape
+    display_img = normalize01(img[::downsample, ::downsample])
+
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.imshow(display_img, cmap="gray", extent=[0, width, height, 0])
+
+    for roi in (cpu_r, cpu_l):
+        coords = roi.coordinates()
+        coords = np.vstack([coords, coords[:1]])  # close the polygon
+        ax.plot(coords[:, 0], coords[:, 1], color="yellow", linewidth=1.5)
+
+    for sep_roi in (sep_r, sep_l):
+        x1, y1, x2, y2 = get_line_endpoints(sep_roi)
+        ax.plot([x1, x2], [y1, y2], color="white", linewidth=2, linestyle="--")
+
+    fibers = objects_df[
+        (objects_df["sample_id"].astype(str) == str(sample_id))
+        & (objects_df["image_file"] == image_file)
+    ]
+    region_colors = {"dorsal": "red", "ventral": "deepskyblue"}
+    for region, color in region_colors.items():
+        pts = fibers[fibers["region"] == region]
+        ax.scatter(pts["centroid_x"], pts["centroid_y"], s=4, color=color, label=region, alpha=0.8)
+
+    ax.set_xlim(0, width)
+    ax.set_ylim(height, 0)
+    ax.set_title(f"{sample_id}\nStriatum_R/Striatum_L outline (yellow), sep line (white)")
+    ax.legend(loc="upper right", markerscale=3)
+    ax.axis("off")
+    fig.tight_layout()
+    return fig
+
